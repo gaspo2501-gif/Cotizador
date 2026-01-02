@@ -1,0 +1,21 @@
+
+{
+  "name": "Cotizador VW Pro",
+  "short_name": "VW Quoter",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#001e50",
+  "theme_color": "#001e50",
+  "icons": [
+    {
+      "src": "https://picsum.photos/192/192",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://picsum.photos/512/512",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

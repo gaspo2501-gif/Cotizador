@@ -1,0 +1,59 @@
+body { 
+    background-color: #f4f7fb; 
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+}
+
+.screen { 
+    display: block; 
+}
+
+.hidden { 
+    display: none !important; 
+}
+
+.input-focus:focus { 
+    outline: none; 
+    border-color: #001e50 !important; 
+    box-shadow: 0 0 0 4px rgba(0, 30, 80, 0.08);
+}
+
+.card-shadow { 
+    box-shadow: 0 20px 50px -12px rgba(0, 30, 80, 0.08); 
+}
+
+/* Transiciones */
+.animate-in {
+    animation: fadeIn 0.4s ease-out, slideUp 0.4s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideUp {
+    from { transform: translateY(12px); }
+    to { transform: translateY(0); }
+}
+
+/* Scrollbar personalizada */
+::-webkit-scrollbar {
+    width: 6px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* Chrome fix para inputs number */
+input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { 
+    -webkit-appearance: none; 
+    margin: 0; 
+}

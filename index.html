@@ -1,0 +1,248 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="mobile-web-app-capable" content="yes">
+    <link rel="manifest" href="manifest.json">
+    <title>Cotizador VW Pro - Iruña</title>
+    
+    <!-- Librerías Externas (CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Estilos Locales -->
+    <link rel="stylesheet" href="style.css">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'vw-blue': '#001e50',
+                        'vw-light-blue': '#00b0f0',
+                        'vw-gray': '#f4f7fb',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+</head>
+<body class="min-h-screen text-slate-800 bg-vw-gray">
+
+    <!-- Header Principal -->
+    <header class="bg-vw-blue text-white sticky top-0 z-50 shadow-lg">
+        <div class="max-w-5xl mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 bg-white rounded-lg flex items-center justify-center text-vw-blue font-extrabold text-xl shadow-inner">VW</div>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight">Cotizador Iruña</h1>
+                    <p class="text-xs text-blue-200 opacity-80 uppercase tracking-tighter">Panel de Ventas v5.5</p>
+                </div>
+            </div>
+            <nav class="flex gap-1 bg-white/10 p-1 rounded-xl">
+                <button onclick="showScreen('cot')" class="nav-btn px-4 py-2 rounded-lg text-sm font-semibold transition hover:bg-white/20" id="btn-nav-cot">Cotizador</button>
+                <button onclick="showScreen('lista')" class="nav-btn px-4 py-2 rounded-lg text-sm font-semibold transition hover:bg-white/20" id="btn-nav-lista">Precios</button>
+                <button onclick="showScreen('promo')" class="nav-btn px-4 py-2 rounded-lg text-sm font-semibold transition hover:bg-white/20" id="btn-nav-promo">Promos</button>
+            </nav>
+        </div>
+    </header>
+
+    <main class="max-w-4xl mx-auto px-4 py-8">
+        <!-- Overlay de Carga y Errores -->
+        <div id="loading-overlay" class="fixed inset-0 bg-white/90 backdrop-blur-md z-[100] flex flex-col items-center justify-center gap-4 transition-opacity duration-500">
+            <div id="loader-spinner" class="w-12 h-12 border-4 border-vw-blue border-t-transparent rounded-full animate-spin"></div>
+            <div id="loader-message" class="text-center px-6">
+                <p class="font-bold text-vw-blue">Sincronizando con base de datos...</p>
+                <p class="text-xs text-slate-400 mt-1">Obteniendo precios y campañas actuales de Google Sheets</p>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-2xl card-shadow overflow-hidden border border-slate-100">
+            
+            <!-- SECCIÓN: COTIZADOR -->
+            <section id="cot" class="screen p-6 md:p-10">
+                <div class="flex items-center justify-between mb-8 border-b border-slate-100 pb-4">
+                    <h2 class="text-2xl font-extrabold text-vw-blue tracking-tight">Cotizar Unidad</h2>
+                    <span class="bg-blue-50 text-vw-blue text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-blue-100">Venta Directa</span>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 mb-10">
+                    <div class="space-y-1.5">
+                        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Modelo</label>
+                        <select id="selModelo" class="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl input-focus appearance-none cursor-pointer font-semibold text-slate-700 transition-all"></select>
+                    </div>
+                    <div class="space-y-1.5">
+                        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Versión y Año</label>
+                        <select id="selVersion" class="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl input-focus appearance-none cursor-pointer font-semibold text-slate-700 transition-all"></select>
+                    </div>
+                    <div class="space-y-1.5">
+                        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Precio Sugerido</label>
+                        <div class="relative">
+                            <span class="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-300">$</span>
+                            <input id="inpPrecio" type="text" readonly class="w-full p-3.5 pl-9 bg-slate-100 border border-slate-200 rounded-xl font-black text-slate-500">
+                        </div>
+                    </div>
+                    <div class="space-y-1.5">
+                        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">FAE (Bonif.)</label>
+                        <div class="relative">
+                            <span class="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-300">$</span>
+                            <input id="inpFae" type="text" readonly class="w-full p-3.5 pl-9 bg-slate-100 border border-slate-200 rounded-xl font-black text-slate-500">
+                        </div>
+                    </div>
+                    <div class="space-y-1.5">
+                        <label class="text-[11px] font-bold text-vw-blue uppercase tracking-wider">Monto a Financiar</label>
+                        <div class="relative">
+                            <span class="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-vw-light-blue">$</span>
+                            <input id="inpMonto" type="text" placeholder="Monto a crédito" class="w-full p-3.5 pl-9 bg-white border-2 border-slate-200 rounded-xl input-focus font-black text-vw-blue transition-all">
+                        </div>
+                    </div>
+                    <div class="space-y-1.5">
+                        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Campaña Vigente</label>
+                        <select id="selCamp" class="w-full p-3.5 bg-white border-2 border-slate-200 rounded-xl input-focus appearance-none cursor-pointer font-bold text-slate-700"></select>
+                    </div>
+                    <div class="md:col-span-2 space-y-3">
+                        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider text-center block">Jurisdicción de Patentamiento</label>
+                        <div class="flex gap-4">
+                            <label class="flex-1 cursor-pointer group">
+                                <input type="radio" name="prov" value="neuquen" checked class="hidden peer" id="selProvNqn">
+                                <div class="p-4 text-center rounded-xl border-2 border-slate-200 peer-checked:border-vw-blue peer-checked:bg-blue-50 peer-checked:text-vw-blue transition-all font-bold group-hover:bg-slate-50">Neuquén</div>
+                            </label>
+                            <label class="flex-1 cursor-pointer group">
+                                <input type="radio" name="prov" value="rionegro" class="hidden peer" id="selProvRn">
+                                <div class="p-4 text-center rounded-xl border-2 border-slate-200 peer-checked:border-vw-blue peer-checked:bg-blue-50 peer-checked:text-vw-blue transition-all font-bold group-hover:bg-slate-50">Río Negro</div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex flex-col md:flex-row gap-4 mb-10">
+                    <button onclick="calcular()" class="flex-[2] bg-vw-blue text-white py-4 px-8 rounded-xl font-black text-lg shadow-xl hover:scale-[1.02] active:scale-95 transition-all">CALCULAR COTIZACIÓN</button>
+                    <div class="flex flex-1 gap-2">
+                        <button onclick="generarPDF()" class="flex-1 bg-slate-100 text-slate-700 p-4 rounded-xl hover:bg-slate-200 transition-colors flex items-center justify-center" title="Descargar PDF">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        </button>
+                        <button onclick="compartirPDF()" class="flex-1 bg-slate-100 text-slate-700 p-4 rounded-xl hover:bg-slate-200 transition-colors flex items-center justify-center" title="Compartir">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="results-panel" class="hidden animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
+                    <div class="bg-gradient-to-br from-vw-blue to-[#003380] p-8 rounded-2xl shadow-lg flex flex-col md:flex-row items-center justify-between gap-6">
+                        <div>
+                            <p class="text-blue-200 font-bold uppercase text-[10px] tracking-widest mb-1 opacity-80">Anticipo Total Requerido</p>
+                            <h3 id="outTotal" class="text-4xl md:text-5xl font-black text-white">$ -</h3>
+                        </div>
+                        <div class="text-center md:text-right bg-white/10 p-4 rounded-xl border border-white/10 backdrop-blur-sm">
+                            <p class="text-blue-100 font-bold uppercase text-[9px] tracking-widest mb-1 opacity-70">Cuota Est. de Plan</p>
+                            <p id="cuotaBig" class="text-3xl font-black text-vw-light-blue">$ -</p>
+                        </div>
+                    </div>
+                    <div id="outDetails" class="bg-slate-50 p-6 rounded-2xl border border-slate-200 text-sm font-medium space-y-3">
+                        <!-- Detalles JS -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECCIÓN: LISTA PRECIOS -->
+            <section id="lista" class="screen hidden p-6 md:p-10">
+                <div class="flex flex-col md:flex-row items-center justify-between mb-8 gap-4">
+                    <h2 class="text-2xl font-black text-vw-blue">Lista de Precios</h2>
+                    <div class="relative w-full md:w-64">
+                        <input type="text" id="tableSearch" placeholder="Filtrar modelo..." class="w-full p-2.5 pl-4 border border-slate-200 rounded-xl text-sm input-focus bg-slate-50 font-semibold">
+                    </div>
+                </div>
+                <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                    <table class="w-full text-left border-collapse" id="tablaLista">
+                        <thead class="bg-slate-50 border-b border-slate-200">
+                            <tr>
+                                <th class="p-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">Modelo</th>
+                                <th class="p-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">Versión / Año</th>
+                                <th class="p-4 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">Precio Final</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 text-sm font-semibold text-slate-700"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- SECCIÓN: PROMOS -->
+            <section id="promo" class="screen hidden p-6 md:p-10">
+                <div class="flex items-center justify-between mb-8">
+                    <h2 class="text-2xl font-black text-vw-blue">Promociones Manuales</h2>
+                    <span class="bg-amber-100 text-amber-700 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-amber-200">Carga Libre</span>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+                    <div class="space-y-1.5">
+                        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Precio Especial</label>
+                        <input id="prPrecio" type="text" placeholder="Ej: 22.000.000" class="w-full p-3.5 bg-white border-2 border-slate-200 rounded-xl input-focus font-black text-vw-blue">
+                    </div>
+                    <div class="space-y-1.5">
+                        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Gasto Patentamiento (Opcional)</label>
+                        <input id="prPatent" type="text" placeholder="Vacío = calcular automático" class="w-full p-3.5 bg-white border border-slate-200 rounded-xl input-focus font-bold text-slate-600">
+                    </div>
+                    <div class="space-y-1.5">
+                        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Jurisdicción</label>
+                        <select id="prProv" class="w-full p-3.5 bg-white border border-slate-200 rounded-xl input-focus font-bold">
+                            <option value="neuquen">Neuquén</option>
+                            <option value="rionegro">Río Negro</option>
+                        </select>
+                    </div>
+                    <div class="space-y-1.5">
+                        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Campaña a aplicar</label>
+                        <select id="prCamp" class="w-full p-3.5 bg-white border border-slate-200 rounded-xl input-focus font-bold"></select>
+                    </div>
+                    <div class="md:col-span-2 space-y-1.5">
+                        <label class="text-[11px] font-bold text-vw-blue uppercase tracking-wider">Monto Financiar</label>
+                        <input id="prMonto" type="text" placeholder="Ej: 8.000.000" class="w-full p-4 bg-white border-2 border-slate-200 rounded-xl input-focus font-black text-vw-blue">
+                    </div>
+                </div>
+                <button onclick="calcularPromo()" class="w-full bg-vw-blue text-white py-5 px-8 rounded-xl font-black shadow-xl hover:scale-[1.01] transition-all mb-10">CALCULAR PROMOCIÓN</button>
+                
+                <div id="promo-results" class="hidden space-y-6">
+                    <div class="bg-gradient-to-br from-vw-light-blue to-blue-600 p-8 rounded-2xl shadow-lg flex flex-col md:flex-row items-center justify-between gap-6 text-white">
+                        <div>
+                            <p class="text-white/70 font-bold uppercase text-[10px] tracking-widest mb-1">Inversión Final Promo</p>
+                            <h3 id="outPromoTotal" class="text-4xl font-black">$ -</h3>
+                        </div>
+                        <div class="text-right bg-black/10 p-4 rounded-xl border border-white/20">
+                            <p class="text-white/70 font-bold uppercase text-[9px] tracking-widest mb-1">Cuota Est.</p>
+                            <p id="promoCuotaBig" class="text-3xl font-black">$ -</p>
+                        </div>
+                    </div>
+                    <div id="outPromoDetails" class="bg-slate-50 p-6 rounded-2xl border border-slate-200 text-sm font-medium space-y-3"></div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer class="max-w-4xl mx-auto px-4 py-12 text-center">
+        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Iruña S.A. © 2024 • Concesionario Oficial Volkswagen</p>
+        <p class="text-[9px] text-slate-300 mt-2">Los valores son ilustrativos y pueden cambiar sin previo aviso por condiciones de fábrica.</p>
+    </footer>
+
+    <!-- Lógica de la App (Se mueve al final para asegurar carga del DOM) -->
+    <script src="app.js"></script>
+
+    <!-- Script de respaldo para ocultar el loader -->
+    <script>
+      window.addEventListener('DOMContentLoaded', () => {
+        // Un pequeño retraso para permitir que app.js intente la sincronización
+        setTimeout(() => {
+          const loader = document.getElementById('loading-overlay');
+          if (loader && !loader.classList.contains('hidden')) {
+            console.log("Loader ocultado por script de respaldo.");
+            loader.classList.add('opacity-0');
+            setTimeout(() => loader.classList.add('hidden'), 500);
+          }
+        }, 5000); // 5 segundos de cortesía
+      });
+    </script>
+</body>
+</html>
