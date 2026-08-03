@@ -1,0 +1,6 @@
+{
+  "name": "Cotizador de Vehículos Pro",
+  "description": "Herramienta profesional de cotización y comparativa para vehículos.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

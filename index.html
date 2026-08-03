@@ -1,20 +1,50 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="mobile-web-app-capable" content="yes">
-    <link rel="manifest" href="manifest.json">
-    <title>Cotizador VW Pro - Iruña</title>
+    <title>AutoQuote Pro | Cotizador Profesional</title>
     
-    <!-- Librerías Externas (CDN) -->
+    <!-- Scripts & CDNs -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
     
-    <!-- Estilos Locales -->
-    <link rel="stylesheet" href="style.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+        
+        :root {
+            --vw-blue: #001e50;
+            --vw-light-blue: #00b0f0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+        }
+
+        .vw-blue { color: var(--vw-blue); }
+        .bg-vw-blue { background-color: var(--vw-blue); }
+        .border-vw-blue { border-color: var(--vw-blue); }
+        .text-vw-light-blue { color: var(--vw-light-blue); }
+        
+        .premium-shadow {
+            box-shadow: 0 20px 25px -5px rgba(0, 30, 80, 0.05), 0 10px 10px -5px rgba(0, 30, 80, 0.02);
+        }
+
+        [x-cloak] { display: none !important; }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        @media (max-width: 768px) {
+            .mobile-table th:nth-child(3), .mobile-table td:nth-child(3),
+            .mobile-table th:nth-child(4), .mobile-table td:nth-child(4) {
+                display: none;
+            }
+        }
+    </style>
 
     <script>
         tailwind.config = {
@@ -23,226 +53,1082 @@
                     colors: {
                         'vw-blue': '#001e50',
                         'vw-light-blue': '#00b0f0',
-                        'vw-gray': '#f4f7fb',
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                    },
+                        'vw-gray-bg': '#f3f6f9',
+                    }
                 }
             }
         }
     </script>
 </head>
-<body class="min-h-screen text-slate-800 bg-vw-gray">
+<body x-data="app()" x-init="initData()">
 
-    <!-- Header Principal -->
-    <header class="bg-vw-blue text-white sticky top-0 z-50 shadow-lg">
-        <div class="max-w-5xl mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-4">
-            <div class="flex items-center gap-3">
-                <div class="w-12 h-12 bg-white rounded-lg flex items-center justify-center text-vw-blue font-extrabold text-xl shadow-inner">VW</div>
-                <div>
-                    <h1 class="font-bold text-lg leading-tight">Cotizador Iruña</h1>
-                    <p class="text-xs text-blue-200 opacity-80 uppercase tracking-tighter">Panel de Ventas v5.5</p>
-                </div>
+    <!-- Loading Overlay -->
+    <div x-show="loading" class="fixed inset-0 bg-white/80 backdrop-blur-sm z-[100] flex flex-col items-center justify-center gap-4">
+        <div class="w-12 h-12 border-4 border-vw-blue border-t-transparent rounded-full animate-spin"></div>
+        <p class="font-bold text-vw-blue">Sincronizando base de datos...</p>
+    </div>
+
+    <!-- Error State -->
+    <div x-show="!loading && prices.length === 0" class="min-h-screen flex items-center justify-center p-4">
+        <div class="bg-white p-8 rounded-3xl shadow-xl max-w-md w-full text-center space-y-4">
+            <div class="w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto">
+                <i data-lucide="info" class="w-8 h-8"></i>
             </div>
-            <nav class="flex gap-1 bg-white/10 p-1 rounded-xl">
-                <button onclick="showScreen('cot')" class="nav-btn px-4 py-2 rounded-lg text-sm font-semibold transition hover:bg-white/20" id="btn-nav-cot">Cotizador</button>
-                <button onclick="showScreen('lista')" class="nav-btn px-4 py-2 rounded-lg text-sm font-semibold transition hover:bg-white/20" id="btn-nav-lista">Precios</button>
-                <button onclick="showScreen('promo')" class="nav-btn px-4 py-2 rounded-lg text-sm font-semibold transition hover:bg-white/20" id="btn-nav-promo">Promos</button>
-            </nav>
+            <h2 class="text-xl font-black text-vw-blue">Error de Conexión</h2>
+            <p class="text-slate-500 text-sm">No pudimos conectar con los datos. Por favor reintenta.</p>
+            <button @click="window.location.reload()" class="w-full bg-vw-blue text-white py-3 rounded-xl font-bold uppercase tracking-widest text-xs">Reintentar</button>
         </div>
-    </header>
+    </div>
 
-    <main class="max-w-4xl mx-auto px-4 py-8">
-        <!-- Overlay de Carga y Errores -->
-        <div id="loading-overlay" class="fixed inset-0 bg-white/90 backdrop-blur-md z-[100] flex flex-col items-center justify-center gap-4 transition-opacity duration-500">
-            <div id="loader-spinner" class="w-12 h-12 border-4 border-vw-blue border-t-transparent rounded-full animate-spin"></div>
-            <div id="loader-message" class="text-center px-6">
-                <p class="font-bold text-vw-blue">Sincronizando con base de datos...</p>
-                <p class="text-xs text-slate-400 mt-1">Obteniendo precios y campañas actuales de Google Sheets</p>
-            </div>
-        </div>
-
-        <div class="bg-white rounded-2xl card-shadow overflow-hidden border border-slate-100">
-            
-            <!-- SECCIÓN: COTIZADOR -->
-            <section id="cot" class="screen p-6 md:p-10">
-                <div class="flex items-center justify-between mb-8 border-b border-slate-100 pb-4">
-                    <h2 class="text-2xl font-extrabold text-vw-blue tracking-tight">Cotizar Unidad</h2>
-                    <span class="bg-blue-50 text-vw-blue text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-blue-100">Venta Directa</span>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 mb-10">
-                    <div class="space-y-1.5">
-                        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Modelo</label>
-                        <select id="selModelo" class="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl input-focus appearance-none cursor-pointer font-semibold text-slate-700 transition-all"></select>
+    <!-- Main App Content -->
+    <div x-show="!loading && prices.length > 0" x-cloak>
+        
+        <!-- Header -->
+        <header class="bg-vw-blue text-white sticky top-0 z-50 border-b border-white/10">
+            <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center p-2 text-white shadow-inner border border-white/20">
+                        <i data-lucide="car" class="w-6 h-6"></i>
                     </div>
-                    <div class="space-y-1.5">
-                        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Versión y Año</label>
-                        <select id="selVersion" class="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl input-focus appearance-none cursor-pointer font-semibold text-slate-700 transition-all"></select>
-                    </div>
-                    <div class="space-y-1.5">
-                        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Precio Sugerido</label>
-                        <div class="relative">
-                            <span class="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-300">$</span>
-                            <input id="inpPrecio" type="text" readonly class="w-full p-3.5 pl-9 bg-slate-100 border border-slate-200 rounded-xl font-black text-slate-500">
-                        </div>
-                    </div>
-                    <div class="space-y-1.5">
-                        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">FAE (Bonif.)</label>
-                        <div class="relative">
-                            <span class="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-300">$</span>
-                            <input id="inpFae" type="text" readonly class="w-full p-3.5 pl-9 bg-slate-100 border border-slate-200 rounded-xl font-black text-slate-500">
-                        </div>
-                    </div>
-                    <div class="space-y-1.5">
-                        <label class="text-[11px] font-bold text-vw-blue uppercase tracking-wider">Monto a Financiar</label>
-                        <div class="relative">
-                            <span class="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-vw-light-blue">$</span>
-                            <input id="inpMonto" type="text" placeholder="Monto a crédito" class="w-full p-3.5 pl-9 bg-white border-2 border-slate-200 rounded-xl input-focus font-black text-vw-blue transition-all">
-                        </div>
-                    </div>
-                    <div class="space-y-1.5">
-                        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Campaña Vigente</label>
-                        <select id="selCamp" class="w-full p-3.5 bg-white border-2 border-slate-200 rounded-xl input-focus appearance-none cursor-pointer font-bold text-slate-700"></select>
-                    </div>
-                    <div class="md:col-span-2 space-y-3">
-                        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider text-center block">Jurisdicción de Patentamiento</label>
-                        <div class="flex gap-4">
-                            <label class="flex-1 cursor-pointer group">
-                                <input type="radio" name="prov" value="neuquen" checked class="hidden peer" id="selProvNqn">
-                                <div class="p-4 text-center rounded-xl border-2 border-slate-200 peer-checked:border-vw-blue peer-checked:bg-blue-50 peer-checked:text-vw-blue transition-all font-bold group-hover:bg-slate-50">Neuquén</div>
-                            </label>
-                            <label class="flex-1 cursor-pointer group">
-                                <input type="radio" name="prov" value="rionegro" class="hidden peer" id="selProvRn">
-                                <div class="p-4 text-center rounded-xl border-2 border-slate-200 peer-checked:border-vw-blue peer-checked:bg-blue-50 peer-checked:text-vw-blue transition-all font-bold group-hover:bg-slate-50">Río Negro</div>
-                            </label>
-                        </div>
+                    <div class="hidden sm:block">
+                        <h1 class="font-black text-lg tracking-tight leading-none">AutoQuote Pro</h1>
+                        <p class="text-[10px] text-blue-300/80 uppercase font-bold tracking-[0.2em] mt-1">Cotizador Multimarca</p>
                     </div>
                 </div>
-
-                <div class="flex flex-col md:flex-row gap-4 mb-10">
-                    <button onclick="calcular()" class="flex-[2] bg-vw-blue text-white py-4 px-8 rounded-xl font-black text-lg shadow-xl hover:scale-[1.02] active:scale-95 transition-all">CALCULAR COTIZACIÓN</button>
-                    <div class="flex flex-1 gap-2">
-                        <button onclick="generarPDF()" class="flex-1 bg-slate-100 text-slate-700 p-4 rounded-xl hover:bg-slate-200 transition-colors flex items-center justify-center" title="Descargar PDF">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                        </button>
-                        <button onclick="compartirPDF()" class="flex-1 bg-slate-100 text-slate-700 p-4 rounded-xl hover:bg-slate-200 transition-colors flex items-center justify-center" title="Compartir">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>
-                        </button>
-                    </div>
-                </div>
-
-                <div id="results-panel" class="hidden animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
-                    <div class="bg-gradient-to-br from-vw-blue to-[#003380] p-8 rounded-2xl shadow-lg flex flex-col md:flex-row items-center justify-between gap-6">
-                        <div>
-                            <p class="text-blue-200 font-bold uppercase text-[10px] tracking-widest mb-1 opacity-80">Anticipo Total Requerido</p>
-                            <h3 id="outTotal" class="text-4xl md:text-5xl font-black text-white">$ -</h3>
-                        </div>
-                        <div class="text-center md:text-right bg-white/10 p-4 rounded-xl border border-white/10 backdrop-blur-sm">
-                            <p class="text-blue-100 font-bold uppercase text-[9px] tracking-widest mb-1 opacity-70">Cuota Est. de Plan</p>
-                            <p id="cuotaBig" class="text-3xl font-black text-vw-light-blue">$ -</p>
-                        </div>
-                    </div>
-                    <div id="outDetails" class="bg-slate-50 p-6 rounded-2xl border border-slate-200 text-sm font-medium space-y-3">
-                        <!-- Detalles JS -->
-                    </div>
-                </div>
-            </section>
-
-            <!-- SECCIÓN: LISTA PRECIOS -->
-            <section id="lista" class="screen hidden p-6 md:p-10">
-                <div class="flex flex-col md:flex-row items-center justify-between mb-8 gap-4">
-                    <h2 class="text-2xl font-black text-vw-blue">Lista de Precios</h2>
-                    <div class="relative w-full md:w-64">
-                        <input type="text" id="tableSearch" placeholder="Filtrar modelo..." class="w-full p-2.5 pl-4 border border-slate-200 rounded-xl text-sm input-focus bg-slate-50 font-semibold">
-                    </div>
-                </div>
-                <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-                    <table class="w-full text-left border-collapse" id="tablaLista">
-                        <thead class="bg-slate-50 border-b border-slate-200">
-                            <tr>
-                                <th class="p-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">Modelo</th>
-                                <th class="p-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">Versión / Año</th>
-                                <th class="p-4 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">Precio Final</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-100 text-sm font-semibold text-slate-700"></tbody>
-                    </table>
-                </div>
-            </section>
-
-            <!-- SECCIÓN: PROMOS -->
-            <section id="promo" class="screen hidden p-6 md:p-10">
-                <div class="flex items-center justify-between mb-8">
-                    <h2 class="text-2xl font-black text-vw-blue">Promociones Manuales</h2>
-                    <span class="bg-amber-100 text-amber-700 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-amber-200">Carga Libre</span>
-                </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-                    <div class="space-y-1.5">
-                        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Precio Especial</label>
-                        <input id="prPrecio" type="text" placeholder="Ej: 22.000.000" class="w-full p-3.5 bg-white border-2 border-slate-200 rounded-xl input-focus font-black text-vw-blue">
-                    </div>
-                    <div class="space-y-1.5">
-                        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Gasto Patentamiento (Opcional)</label>
-                        <input id="prPatent" type="text" placeholder="Vacío = calcular automático" class="w-full p-3.5 bg-white border border-slate-200 rounded-xl input-focus font-bold text-slate-600">
-                    </div>
-                    <div class="space-y-1.5">
-                        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Jurisdicción</label>
-                        <select id="prProv" class="w-full p-3.5 bg-white border border-slate-200 rounded-xl input-focus font-bold">
-                            <option value="neuquen">Neuquén</option>
-                            <option value="rionegro">Río Negro</option>
-                        </select>
-                    </div>
-                    <div class="space-y-1.5">
-                        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Campaña a aplicar</label>
-                        <select id="prCamp" class="w-full p-3.5 bg-white border border-slate-200 rounded-xl input-focus font-bold"></select>
-                    </div>
-                    <div class="md:col-span-2 space-y-1.5">
-                        <label class="text-[11px] font-bold text-vw-blue uppercase tracking-wider">Monto Financiar</label>
-                        <input id="prMonto" type="text" placeholder="Ej: 8.000.000" class="w-full p-4 bg-white border-2 border-slate-200 rounded-xl input-focus font-black text-vw-blue">
-                    </div>
-                </div>
-                <button onclick="calcularPromo()" class="w-full bg-vw-blue text-white py-5 px-8 rounded-xl font-black shadow-xl hover:scale-[1.01] transition-all mb-10">CALCULAR PROMOCIÓN</button>
                 
-                <div id="promo-results" class="hidden space-y-6">
-                    <div class="bg-gradient-to-br from-vw-light-blue to-blue-600 p-8 rounded-2xl shadow-lg flex flex-col md:flex-row items-center justify-between gap-6 text-white">
-                        <div>
-                            <p class="text-white/70 font-bold uppercase text-[10px] tracking-widest mb-1">Inversión Final Promo</p>
-                            <h3 id="outPromoTotal" class="text-4xl font-black">$ -</h3>
+                <div class="flex items-center gap-3 sm:gap-6">
+                    <nav class="flex bg-black/20 p-1 rounded-2xl backdrop-blur-md border border-white/5 overflow-x-auto no-scrollbar">
+                        <template x-for="scr in ['cot', 'comp', 'lista', 'promo', 'entrega']">
+                            <button @click="currentScreen = scr" :class="currentScreen === scr ? 'bg-white text-vw-blue shadow-sm' : 'text-blue-200 hover:text-white'" class="px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 whitespace-nowrap" x-text="getScreenName(scr)"></button>
+                        </template>
+                    </nav>
+                </div>
+            </div>
+        </header>
+
+        <main class="max-w-6xl mx-auto px-4 py-8">
+            <div class="bg-white rounded-2xl premium-shadow overflow-hidden min-h-[600px] border border-slate-50 transition-all duration-500">
+                
+                <!-- Screen: Cotizador -->
+                <div x-show="currentScreen === 'cot'" class="p-6 md:p-10">
+                    <div class="flex justify-between items-center mb-10">
+                        <div><h2 class="text-3xl font-black text-vw-blue">Nueva Cotización</h2><p class="text-slate-400 text-sm mt-1">Venta Directa Profesional</p></div>
+                        <span class="bg-blue-50 text-vw-blue text-[10px] font-black px-4 py-2 rounded-full uppercase tracking-widest border border-blue-100 italic">Venta Directa</span>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-8 mb-10">
+                        <!-- Left Panel -->
+                        <div class="md:col-span-6 space-y-6">
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="space-y-1">
+                                    <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Modelo</label>
+                                    <select x-model="cot_mod" @change="cot_ver = 0" class="w-full p-3.5 bg-slate-50 border rounded-2xl font-bold border-slate-100">
+                                        <template x-for="m in uniqueModels">
+                                            <option :value="m" x-text="m.toUpperCase()"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Versión</label>
+                                    <select x-model="cot_ver" class="w-full p-3.5 bg-slate-50 border rounded-2xl border-slate-100 text-sm">
+                                        <template x-for="(v, i) in filteredVersions(cot_mod)">
+                                            <option :value="i" x-text="v.version + ' - ' + v.ano"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="grid grid-cols-2 gap-4" x-data="{ v: filteredVersions(cot_mod)[cot_ver] }">
+                                <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                    <span class="text-[9px] block text-slate-400 font-bold mb-1 uppercase">Lista Final</span>
+                                    <span class="text-lg font-black text-vw-blue" x-text="fmtCurrency(filteredVersions(cot_mod)[cot_ver]?.precioFinal || 0)"></span>
+                                </div>
+                                <div class="p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
+                                    <span class="text-[9px] block text-emerald-600 font-bold mb-1 uppercase">FAE / Bonific.</span>
+                                    <span class="text-lg font-black text-emerald-700" x-text="fmtCurrency(filteredVersions(cot_mod)[cot_ver]?.fae || 0)"></span>
+                                </div>
+                            </div>
+
+                            <div class="space-y-1">
+                                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Valor de Usado</label>
+                                <div class="relative">
+                                    <span class="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-vw-light-blue">$</span>
+                                    <input type="text" :value="cot_usd_display" @input="cot_usd_display = fmtInput($event.target.value)" placeholder="Monto toma de usado..." class="w-full p-4 pl-9 border rounded-2xl font-black text-vw-light-blue border-slate-100">
+                                </div>
+                            </div>
                         </div>
-                        <div class="text-right bg-black/10 p-4 rounded-xl border border-white/20">
-                            <p class="text-white/70 font-bold uppercase text-[9px] tracking-widest mb-1">Cuota Est.</p>
-                            <p id="promoCuotaBig" class="text-3xl font-black">$ -</p>
+
+                        <!-- Right Panel -->
+                        <div class="md:col-span-6 space-y-6">
+                            <!-- Fin 1 -->
+                            <div class="p-6 bg-slate-50/50 rounded-3xl border border-slate-200 space-y-4">
+                                <h4 class="text-[10px] font-black uppercase text-vw-blue">Financiación Principal</h4>
+                                <div class="space-y-4">
+                                    <div class="relative">
+                                        <span class="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-vw-blue">$</span>
+                                        <input type="text" :value="cot_mnt1_display" @input="cot_mnt1_display = fmtInput($event.target.value)" placeholder="Contado si vacío" class="w-full p-3.5 pl-9 bg-white border rounded-2xl font-black border-slate-100">
+                                    </div>
+                                    <div :class="cleanNum(cot_mnt1_display) === 0 ? 'opacity-30' : ''">
+                                        <select x-model="cot_cmp1" class="w-full p-3.5 bg-white border rounded-2xl border-slate-100 text-sm font-bold">
+                                            <template x-for="(c, i) in getCamps(cot_mod, filteredVersions(cot_mod)[cot_ver]?.version)">
+                                                <option :value="i" x-text="c.nombre"></option>
+                                            </template>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Fin 2 -->
+                            <div class="p-6 bg-blue-50/30 rounded-3xl border border-blue-100 space-y-4">
+                                <label class="flex items-center gap-3 cursor-pointer">
+                                    <input type="checkbox" x-model="cot_show2" class="sr-only peer">
+                                    <div class="w-11 h-6 bg-slate-200 rounded-full relative peer-checked:bg-vw-blue after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full border border-blue-50"></div>
+                                    <span class="text-xs font-black uppercase text-vw-blue">Segunda Opción</span>
+                                </label>
+                                <div x-show="cot_show2" x-transition class="space-y-4 pt-2">
+                                    <div class="relative">
+                                        <span class="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-vw-blue">$</span>
+                                        <input type="text" :value="cot_mnt2_display" @input="cot_mnt2_display = fmtInput($event.target.value)" class="w-full p-3.5 pl-9 bg-white border rounded-2xl font-black border-slate-100">
+                                    </div>
+                                    <select x-model="cot_cmp2" class="w-full p-3.5 bg-white border rounded-2xl border-slate-100 text-sm font-bold">
+                                        <template x-for="(c, i) in getCamps(cot_mod, filteredVersions(cot_mod)[cot_ver]?.version)">
+                                            <option :value="i" x-text="c.nombre"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <div id="outPromoDetails" class="bg-slate-50 p-6 rounded-2xl border border-slate-200 text-sm font-medium space-y-3"></div>
+
+                    <!-- Footer Controls -->
+                    <div class="flex flex-col md:flex-row gap-6 items-center">
+                        <div class="flex p-1.5 bg-slate-100 rounded-2xl gap-1 w-full md:w-80">
+                            <button @click="provincia = 'neuquen'" :class="provincia === 'neuquen' ? 'bg-white text-vw-blue shadow-sm' : 'text-slate-400'" class="flex-1 py-3 text-[10px] font-black uppercase rounded-xl transition-all">Neuquén</button>
+                            <button @click="provincia = 'rionegro'" :class="provincia === 'rionegro' ? 'bg-white text-vw-blue shadow-sm' : 'text-slate-400'" class="flex-1 py-3 text-[10px] font-black uppercase rounded-xl transition-all">Río Negro</button>
+                        </div>
+                        <button @click="calculateCot()" class="w-full bg-vw-blue text-white py-5 font-black uppercase text-sm tracking-widest rounded-2xl shadow-xl shadow-vw-blue/20 hover:scale-[1.01] active:scale-95 transition-all">Calcular Propuesta</button>
+                    </div>
                 </div>
-            </section>
-        </div>
-    </main>
 
-    <footer class="max-w-4xl mx-auto px-4 py-12 text-center">
-        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Iruña S.A. © 2024 • Concesionario Oficial Volkswagen</p>
-        <p class="text-[9px] text-slate-300 mt-2">Los valores son ilustrativos y pueden cambiar sin previo aviso por condiciones de fábrica.</p>
-    </footer>
+                <!-- Screen: Precios -->
+                <div x-show="currentScreen === 'lista'" class="p-6 md:p-10">
+                   <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
+                       <h2 class="text-3xl font-black text-vw-blue">Lista de Precios Vigente</h2>
+                       <div class="relative w-full md:w-80">
+                           <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 w-4 h-4"></i>
+                           <input type="text" x-model="search" placeholder="Buscar modelo o versión..." class="w-full pl-10 p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-blue-50 transition-all font-medium">
+                       </div>
+                   </div>
+                   
+                   <div class="overflow-x-auto rounded-[32px] border border-slate-100">
+                       <table class="w-full text-left mobile-table">
+                           <thead class="bg-slate-50/80">
+                               <tr>
+                                   <th class="p-5 text-[10px] font-black uppercase text-slate-400">Modelo</th>
+                                   <th class="p-5 text-[10px] font-black uppercase text-slate-400">Versión</th>
+                                   <th class="p-5 text-[10px] font-black uppercase text-slate-400 text-right">Lista</th>
+                                   <th class="p-5 text-[10px] font-black uppercase text-slate-400 text-right text-emerald-600">FAE</th>
+                                   <th class="p-5 text-[10px] font-black uppercase text-slate-400 text-right">Final</th>
+                                   <th class="p-5 text-[10px] font-black uppercase text-slate-400 text-right">RN / NQN</th>
+                               </tr>
+                           </thead>
+                           <tbody>
+                               <template x-for="p in filteredPrices">
+                                   <tr class="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                                       <td class="p-5 font-black text-vw-blue uppercase text-sm" x-text="p.modelo"></td>
+                                       <td class="p-5 text-slate-600 text-xs" x-text="p.version + ' (' + p.ano + ')'"></td>
+                                       <td class="p-5 text-right text-xs text-slate-400" x-text="fmtCurrency(p.precioSugerido)"></td>
+                                       <td class="p-5 text-right font-black text-emerald-600 text-xs" x-text="fmtCurrency(p.fae)"></td>
+                                       <td class="p-5 text-right font-black text-vw-blue text-lg" x-text="fmtCurrency(p.precioFinal)"></td>
+                                       <td class="p-5 text-right text-[10px] text-slate-400 font-bold" x-text="fmtCurrency(p.rn) + ' / ' + fmtCurrency(p.nqn)"></td>
+                                   </tr>
+                               </template>
+                           </tbody>
+                       </table>
+                   </div>
+                </div>
 
-    <!-- Lógica de la App (Se mueve al final para asegurar carga del DOM) -->
-    <script src="app.js"></script>
+                <!-- Otras pantallas serán inyectadas por el script de Alpine -->
+                <!-- Screen: Comparar -->
+                <div x-show="currentScreen === 'comp'" class="p-6 md:p-10">
+                    <h2 class="text-3xl font-black text-vw-blue mb-10">Comparativa de Modelos</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
+                        <!-- Box A -->
+                        <div class="p-8 bg-white border border-slate-100 rounded-[38px] premium-shadow space-y-6">
+                            <div class="flex justify-between items-center">
+                                <span class="bg-vw-blue text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase">OPCIÓN A</span>
+                            </div>
+                            <div class="space-y-4">
+                                <select x-model="comp_mod_a" @change="comp_ver_a = 0" class="w-full p-3.5 bg-slate-50 border rounded-2xl font-bold border-slate-100">
+                                    <template x-for="m in uniqueModels"><option :value="m" x-text="m.toUpperCase()"></option></template>
+                                </select>
+                                <select x-model="comp_ver_a" class="w-full p-3.5 bg-slate-50 border rounded-2xl border-slate-100 text-xs">
+                                    <template x-for="(v, i) in filteredVersions(comp_mod_a)"><option :value="i" x-text="v.version"></option></template>
+                                </select>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div class="relative"><span class="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-vw-blue text-xs">$</span><input :value="comp_mnt_a" @input="comp_mnt_a = fmtInput($event.target.value)" placeholder="Financiar" class="w-full p-3.5 pl-8 border rounded-2xl font-black text-sm border-slate-100"></div>
+                                    <div class="relative"><span class="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-slate-400 text-xs">$</span><input :value="comp_usd_a" @input="comp_usd_a = fmtInput($event.target.value)" placeholder="Usado" class="w-full p-3.5 pl-8 border rounded-2xl font-black text-sm border-slate-100"></div>
+                                </div>
+                                <select x-model="comp_cmp_a" class="w-full p-3.5 bg-slate-100/50 border rounded-2xl border-slate-100 text-[10px] font-bold">
+                                    <template x-for="(c, i) in getCamps(comp_mod_a, filteredVersions(comp_mod_a)[comp_ver_a]?.version)"><option :value="i" x-text="c.nombre"></option></template>
+                                </select>
 
-    <!-- Script de respaldo para ocultar el loader -->
+                                <!-- Segunda Opción A -->
+                                <div class="p-4 bg-slate-50/50 rounded-2xl border border-slate-100 space-y-3 mt-4">
+                                    <label class="flex items-center gap-3 cursor-pointer">
+                                        <input type="checkbox" x-model="comp_show2_a" class="sr-only peer">
+                                        <div class="w-10 h-5 bg-slate-200 rounded-full relative peer-checked:bg-vw-blue after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full border border-blue-50"></div>
+                                        <span class="text-[9px] font-black uppercase text-vw-blue">Segunda Opción de Financiación (A)</span>
+                                    </label>
+                                    <div x-show="comp_show2_a" x-transition class="space-y-3 pt-1">
+                                        <div class="relative">
+                                            <span class="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-vw-blue text-xs">$</span>
+                                            <input :value="comp_mnt2_a" @input="comp_mnt2_a = fmtInput($event.target.value)" placeholder="Segundo monto a financiar" class="w-full p-3 pl-7 border rounded-xl font-black text-xs border-slate-100">
+                                        </div>
+                                        <select x-model="comp_cmp2_a" class="w-full p-3 border border-slate-100 rounded-xl text-[10px] font-bold">
+                                            <template x-for="(c, i) in getCamps(comp_mod_a, filteredVersions(comp_mod_a)[comp_ver_a]?.version)"><option :value="i" x-text="c.nombre"></option></template>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Box B -->
+                        <div class="p-8 bg-white border border-slate-100 rounded-[38px] premium-shadow space-y-6">
+                            <div class="flex justify-between items-center">
+                                <span class="bg-vw-light-blue text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase">OPCIÓN B</span>
+                            </div>
+                            <div class="space-y-4">
+                                <select x-model="comp_mod_b" @change="comp_ver_b = 0" class="w-full p-3.5 bg-slate-50 border rounded-2xl font-bold border-slate-100">
+                                    <template x-for="m in uniqueModels"><option :value="m" x-text="m.toUpperCase()"></option></template>
+                                </select>
+                                <select x-model="comp_ver_b" class="w-full p-3.5 bg-slate-50 border rounded-2xl border-slate-100 text-xs">
+                                    <template x-for="(v, i) in filteredVersions(comp_mod_b)"><option :value="i" x-text="v.version"></option></template>
+                                </select>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div class="relative"><span class="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-vw-blue text-xs">$</span><input :value="comp_mnt_b" @input="comp_mnt_b = fmtInput($event.target.value)" placeholder="Financiar" class="w-full p-3.5 pl-8 border rounded-2xl font-black text-sm border-slate-100"></div>
+                                    <div class="relative"><span class="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-slate-400 text-xs">$</span><input :value="comp_usd_b" @input="comp_usd_b = fmtInput($event.target.value)" placeholder="Usado" class="w-full p-3.5 pl-8 border rounded-2xl font-black text-sm border-slate-100"></div>
+                                </div>
+                                <select x-model="comp_cmp_b" class="w-full p-3.5 bg-slate-100/50 border rounded-2xl border-slate-100 text-[10px] font-bold">
+                                    <template x-for="(c, i) in getCamps(comp_mod_b, filteredVersions(comp_mod_b)[comp_ver_b]?.version)"><option :value="i" x-text="c.nombre"></option></template>
+                                </select>
+
+                                <!-- Segunda Opción B -->
+                                <div class="p-4 bg-slate-50/50 rounded-2xl border border-slate-100 space-y-3 mt-4">
+                                    <label class="flex items-center gap-3 cursor-pointer">
+                                        <input type="checkbox" x-model="comp_show2_b" class="sr-only peer">
+                                        <div class="w-10 h-5 bg-slate-200 rounded-full relative peer-checked:bg-vw-blue after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full border border-blue-50"></div>
+                                        <span class="text-[9px] font-black uppercase text-vw-blue">Segunda Opción de Financiación (B)</span>
+                                    </label>
+                                    <div x-show="comp_show2_b" x-transition class="space-y-3 pt-1">
+                                        <div class="relative">
+                                            <span class="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-vw-blue text-xs">$</span>
+                                            <input :value="comp_mnt2_b" @input="comp_mnt2_b = fmtInput($event.target.value)" placeholder="Segundo monto a financiar" class="w-full p-3 pl-7 border rounded-xl font-black text-xs border-slate-100">
+                                        </div>
+                                        <select x-model="comp_cmp2_b" class="w-full p-3 border border-slate-100 rounded-xl text-[10px] font-bold">
+                                            <template x-for="(c, i) in getCamps(comp_mod_b, filteredVersions(comp_mod_b)[comp_ver_b]?.version)"><option :value="i" x-text="c.nombre"></option></template>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex flex-col md:flex-row gap-6 items-center">
+                        <div class="flex p-1.5 bg-slate-100 rounded-2xl gap-1 w-full md:w-80">
+                            <button @click="provincia = 'neuquen'" :class="provincia === 'neuquen' ? 'bg-white text-vw-blue shadow-sm' : 'text-slate-400'" class="flex-1 py-3 text-[10px] font-black uppercase rounded-xl transition-all">Neuquén</button>
+                            <button @click="provincia = 'rionegro'" :class="provincia === 'rionegro' ? 'bg-white text-vw-blue shadow-sm' : 'text-slate-400'" class="flex-1 py-3 text-[10px] font-black uppercase rounded-xl transition-all">Río Negro</button>
+                        </div>
+                        <button @click="calculateComp()" class="w-full bg-vw-blue text-white py-5 rounded-2xl font-black uppercase shadow-xl hover:scale-[1.01] transition-all">Comparar ahora</button>
+                    </div>
+                </div>
+
+                <!-- Screen: Promo -->
+                <div x-show="currentScreen === 'promo'" class="p-6 md:p-10">
+                    <h2 class="text-3xl font-black text-vw-blue mb-10">Promociones Especiales</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
+                        <div class="space-y-6">
+                            <div class="grid grid-cols-2 gap-4">
+                                <select x-model="pro_mod" @change="pro_ver = 0" class="p-3.5 bg-slate-50 border rounded-2xl font-bold border-slate-100">
+                                    <template x-for="m in uniqueModels"><option :value="m" x-text="m.toUpperCase()"></option></template>
+                                </select>
+                                <select x-model="pro_ver" class="p-3.5 bg-slate-50 border rounded-2xl text-xs border-slate-100">
+                                    <template x-for="(v, i) in filteredVersions(pro_mod)"><option :value="i" x-text="v.version"></option></template>
+                                </select>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="relative"><span class="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-vw-blue">$</span><input :value="pro_prm" @input="pro_prm = fmtInput($event.target.value)" placeholder="Precio Promo" class="w-full p-4 pl-9 border border-slate-100 rounded-2xl font-black text-vw-blue outline-none" /></div>
+                                <div class="relative"><span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">$</span><input :value="pro_pat" @input="pro_pat = fmtInput($event.target.value)" placeholder="Pactados" class="w-full p-4 pl-9 border border-slate-100 rounded-2xl font-bold text-slate-600 outline-none" /></div>
+                            </div>
+                            <div class="space-y-1">
+                                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Valor de Usado</label>
+                                <div class="relative">
+                                    <span class="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-vw-light-blue">$</span>
+                                    <input type="text" :value="pro_usd_display" @input="pro_usd_display = fmtInput($event.target.value)" placeholder="Monto toma de usado..." class="w-full p-4 pl-9 border rounded-2xl font-black text-vw-light-blue border-slate-100 placeholder-slate-300">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="space-y-6">
+                            <div class="p-6 bg-slate-50/50 rounded-3xl border border-slate-200 space-y-4">
+                                <input :value="pro_mnt" @input="pro_mnt = fmtInput($event.target.value)" placeholder="Monto a Financiar" class="w-full p-3.5 border rounded-2xl font-black border-slate-100" />
+                                <select x-model="pro_cmp" class="w-full p-3.5 border border-slate-100 rounded-2xl text-xs font-bold">
+                                    <template x-for="(c, i) in getCampsPromo(pro_mod, pro_ver)"><option :value="i" x-text="c.nombre"></option></template>
+                                </select>
+                            </div>
+                            
+                            <!-- Segunda Opción Promo -->
+                            <div class="p-6 bg-blue-50/30 rounded-3xl border border-blue-100 space-y-4">
+                                <label class="flex items-center gap-3 cursor-pointer">
+                                    <input type="checkbox" x-model="pro_show2" class="sr-only peer">
+                                    <div class="w-11 h-6 bg-slate-200 rounded-full relative peer-checked:bg-vw-blue after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full border border-blue-50"></div>
+                                    <span class="text-xs font-black uppercase text-vw-blue">Segunda Opción Promo</span>
+                                </label>
+                                <div x-show="pro_show2" x-transition class="space-y-4 pt-2">
+                                    <div class="relative">
+                                        <span class="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-vw-blue">$</span>
+                                        <input type="text" :value="pro_mnt2" @input="pro_mnt2 = fmtInput($event.target.value)" placeholder="Monto a Financiar Opción 2" class="w-full p-3.5 pl-9 bg-white border border-slate-100 rounded-2xl font-black">
+                                    </div>
+                                    <select x-model="pro_cmp2" class="w-full p-3.5 bg-white border border-slate-100 rounded-2xl text-xs font-bold">
+                                        <template x-for="(c, i) in getCampsPromo(pro_mod, pro_ver)"><option :value="i" x-text="c.nombre"></option></template>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="flex flex-col md:flex-row gap-4 items-center">
+                                <div class="flex p-1.5 bg-slate-100 rounded-2xl gap-1 w-full md:w-64">
+                                    <button @click="provincia = 'neuquen'" :class="provincia === 'neuquen' ? 'bg-white text-vw-blue shadow-sm' : 'text-slate-400'" class="flex-1 py-3 text-[10px] font-black uppercase rounded-xl transition-all">Neuquén</button>
+                                    <button @click="provincia = 'rionegro'" :class="provincia === 'rionegro' ? 'bg-white text-vw-blue shadow-sm' : 'text-slate-400'" class="flex-1 py-3 text-[10px] font-black uppercase rounded-xl transition-all">Río Negro</button>
+                                </div>
+                                <div class="flex gap-4 w-full">
+                                    <button @click="calculatePro()" class="flex-1 bg-vw-blue text-white py-4 rounded-2xl font-black uppercase text-xs shadow-md">Calcular con Promo</button>
+                                    <button @click="compareProWithList()" class="flex-1 bg-white text-vw-blue border-2 border-vw-blue py-4 rounded-2xl font-black uppercase text-xs hover:bg-slate-50 transition-colors">Comparar con Lista</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Screen: Por Entrega -->
+                <div x-show="currentScreen === 'entrega'" class="p-6 md:p-10">
+                    <h2 class="text-3xl font-black text-vw-blue mb-10">Cálculo Inverso (Por Entrega)</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
+                        <div class="space-y-6">
+                            <div class="grid grid-cols-2 gap-4">
+                                <select x-model="ent_mod" @change="ent_ver = 0" class="p-3.5 bg-slate-50 border rounded-2xl font-bold border-slate-100">
+                                    <template x-for="m in uniqueModels"><option :value="m" x-text="m.toUpperCase()"></option></template>
+                                </select>
+                                <select x-model="ent_ver" class="p-3.5 bg-slate-50 border rounded-2xl text-xs border-slate-100">
+                                    <template x-for="(v, i) in filteredVersions(ent_mod)"><option :value="i" x-text="v.version"></option></template>
+                                </select>
+                            </div>
+                            <div class="space-y-4">
+                                <label class="flex items-center gap-3 cursor-pointer group">
+                                    <div class="relative">
+                                        <input type="checkbox" x-model="ent_is_pro" class="sr-only peer">
+                                        <div class="w-10 h-5 bg-slate-200 rounded-full peer peer-checked:bg-vw-blue transition-all"></div>
+                                        <div class="absolute left-1 top-1 w-3 h-3 bg-white rounded-full peer-checked:translate-x-5 transition-all"></div>
+                                    </div>
+                                    <span class="text-[10px] font-black uppercase text-slate-500 tracking-wider">Precio Promocional / Especial</span>
+                                </label>
+
+                                <div x-show="ent_is_pro" x-collapse x-cloak class="grid grid-cols-2 gap-4 animate-in slide-in-from-top-2">
+                                    <div class="relative">
+                                        <span class="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-vw-blue text-xs">$</span>
+                                        <input :value="ent_prm" @input="ent_prm = fmtInput($event.target.value)" placeholder="Precio Promo" class="w-full p-3.5 pl-8 border rounded-2xl font-black text-sm border-slate-100 bg-blue-50/30">
+                                    </div>
+                                    <div class="relative">
+                                        <span class="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-slate-400 text-xs">$</span>
+                                        <input :value="ent_pat" @input="ent_pat = fmtInput($event.target.value)" placeholder="Pactados" class="w-full p-3.5 pl-8 border rounded-2xl font-black text-sm border-slate-100 bg-slate-50/30">
+                                    </div>
+                                </div>
+
+                                <div class="space-y-2">
+                                    <label class="text-[10px] font-black uppercase text-slate-400">Total Disponible Cliente</label>
+                                    <div class="relative">
+                                        <span class="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-vw-light-blue text-lg">$</span>
+                                        <input type="text" :value="ent_val" @input="ent_val = fmtInput($event.target.value)" placeholder="Capital del cliente..." class="w-full p-5 pl-10 border border-slate-100 rounded-2xl font-black text-vw-light-blue text-2xl outline-none focus:ring-4 focus:ring-blue-50">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="space-y-6">
+                            <div class="p-6 bg-slate-50/50 border border-slate-200 rounded-3xl space-y-4">
+                                <span class="text-[10px] uppercase font-black text-slate-400 block mb-1">Campaña Opción 1</span>
+                                <select x-model="ent_cmp" class="w-full p-3.5 border border-slate-100 rounded-2xl text-xs font-bold bg-white">
+                                    <template x-for="(c, i) in getCamps(ent_mod, filteredVersions(ent_mod)[ent_ver]?.version)"><option :value="i" x-text="c.nombre"></option></template>
+                                </select>
+                            </div>
+
+                            <!-- Segunda Opción por Entrega -->
+                            <div class="p-6 bg-blue-50/30 rounded-3xl border border-blue-100 space-y-4">
+                                <label class="flex items-center gap-3 cursor-pointer">
+                                    <input type="checkbox" x-model="ent_show2" class="sr-only peer">
+                                    <div class="w-11 h-6 bg-slate-200 rounded-full relative peer-checked:bg-vw-blue after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full border border-blue-50"></div>
+                                    <span class="text-xs font-black uppercase text-vw-blue">Segunda Opción por Entrega</span>
+                                </label>
+                                <div x-show="ent_show2" x-transition class="space-y-4 pt-2">
+                                    <div class="space-y-2">
+                                        <label class="text-[10px] font-black uppercase text-slate-400">Total Disponible Opción 2 (Opcional, vacío usa el mismo)</label>
+                                        <div class="relative">
+                                            <span class="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-vw-light-blue text-sm">$</span>
+                                            <input type="text" :value="ent_val2" @input="ent_val2 = fmtInput($event.target.value)" placeholder="Capital del cliente opción 2..." class="w-full p-4 pl-8 border border-slate-100 rounded-2xl font-black text-vw-light-blue text-lg outline-none bg-white">
+                                        </div>
+                                    </div>
+                                    <div class="space-y-1">
+                                        <label class="text-[10px] font-black uppercase text-slate-400">Campaña Opción 2</label>
+                                        <select x-model="ent_cmp2" class="w-full p-3.5 bg-white border border-slate-100 rounded-2xl text-xs font-bold">
+                                            <template x-for="(c, i) in getCamps(ent_mod, filteredVersions(ent_mod)[ent_ver]?.version)"><option :value="i" x-text="c.nombre"></option></template>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex flex-col md:flex-row gap-6 items-center">
+                                <div class="flex p-1.5 bg-slate-100 rounded-2xl gap-1 w-full md:w-80">
+                                    <button @click="provincia = 'neuquen'" :class="provincia === 'neuquen' ? 'bg-white text-vw-blue shadow-sm' : 'text-slate-400'" class="flex-1 py-3 text-[10px] font-black uppercase rounded-xl transition-all">Neuquén</button>
+                                    <button @click="provincia = 'rionegro'" :class="provincia === 'rionegro' ? 'bg-white text-vw-blue shadow-sm' : 'text-slate-400'" class="flex-1 py-3 text-[10px] font-black uppercase rounded-xl transition-all">Río Negro</button>
+                                </div>
+                                <button @click="calculateEnt()" class="w-full bg-vw-blue text-white p-5 rounded-2xl font-black uppercase shadow-xl hover:scale-[1.01] transition-all">Calcular Financiación</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Result Section (Shared among all tools) -->
+                <div x-show="results.length > 0" class="p-8 border-t border-slate-100 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                    <div class="flex items-center gap-4 mb-10">
+                        <div class="h-px bg-slate-200 flex-1"></div>
+                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Resultados del Análisis</span>
+                        <div class="h-px bg-slate-200 flex-1"></div>
+                    </div>
+                    
+                    <div x-show="results.length > 0 && !results.some(r => r.isError)" class="flex justify-end gap-3 mb-8">
+                        <button @click="downloadResults()" class="bg-white text-slate-600 px-6 py-3 rounded-2xl border border-slate-200 hover:bg-slate-50 transition-all shadow-sm flex items-center gap-2 font-bold text-xs uppercase uppercase"><i data-lucide="file-down" class="w-4 h-4"></i> Descargar PDF</button>
+                        <button @click="shareResults()" class="bg-white text-slate-600 p-3 rounded-2xl border border-slate-200 hover:bg-slate-50 transition-all shadow-sm"><i data-lucide="share-2" class="w-5 h-5"></i></button>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <template x-for="(calc, idx) in results">
+                            <div class="w-full">
+                                <!-- Normal Result Card -->
+                                <div x-show="!calc.isError" class="bg-white p-8 rounded-[38px] border border-slate-100 premium-shadow relative overflow-hidden group">
+                                    <div class="absolute top-0 right-0 w-32 h-32 bg-vw-blue/5 rounded-full -mr-16 -mt-16"></div>
+                                    <div class="flex items-center justify-between mb-8">
+                                        <span class="px-4 py-1.5 bg-vw-blue text-white text-[10px] font-black uppercase tracking-widest rounded-full" x-text="'Opción ' + (idx + 1)"></span>
+                                        <div class="text-right">
+                                            <span class="block text-[10px] font-black text-slate-300 uppercase leading-none" x-text="calc.campNombre"></span>
+                                            <span class="block text-[9px] font-bold text-slate-400 mt-1" x-text="calc.modelo"></span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="space-y-6">
+                                        <div class="bg-slate-50 p-6 rounded-3xl">
+                                            <p class="text-slate-400 font-bold uppercase text-[9px] tracking-widest mb-2" x-text="calc.montoFinanciado === 0 ? 'Precio Final' : 'Inversión Total Estimada'"></p>
+                                            <h3 class="text-3xl font-black text-vw-blue" x-text="fmtCurrency(calc.anticipo)"></h3>
+                                        </div>
+                                        <div class="bg-blue-50/50 p-6 rounded-3xl">
+                                            <p class="text-vw-light-blue font-bold uppercase text-[9px] tracking-widest mb-2">Compromiso Mensual</p>
+                                            <h3 class="text-2xl font-black text-vw-blue" x-html="calc.montoFinanciado === 0 ? 'PAGO ÚNICO' : fmtCurrency(calc.cuota) + ' <span class=\'text-sm font-bold text-slate-400\'>+ Seg.</span>'"></h3>
+                                        </div>
+                                        
+                                        <div class="pt-6 border-t border-slate-100 space-y-3">
+                                            <div class="flex justify-between text-xs text-slate-500"><span class="font-medium">Valor Unidad</span><span class="font-bold text-slate-700" x-text="fmtCurrency(calc.precioFinal)"></span></div>
+                                            <div x-show="calc.usado > 0" class="flex justify-between p-3 bg-blue-50 rounded-xl text-[11px]"><span class="text-vw-blue font-bold">CRÉDITO USADO</span><span class="text-vw-blue font-black" x-text="'- ' + fmtCurrency(calc.usado)"></span></div>
+                                            <div class="flex justify-between text-xs text-slate-500"><span>Patentamiento</span><span x-text="fmtCurrency(calc.patent)"></span></div>
+                                            <div x-show="calc.montoFinanciado > 0" class="pt-2 space-y-2">
+                                                <div class="flex justify-between text-xs text-slate-400"><span>Gastos de Administración/Gestión</span><span x-text="fmtCurrency(calc.gestion)"></span></div>
+                                                <div class="flex justify-between text-xs text-slate-400"><span>Sellado de Prenda</span><span x-text="fmtCurrency(calc.prenda)"></span></div>
+                                                <div class="flex justify-between text-xs text-slate-400"><span>Der. Adjudicación / Quebranto</span><span x-text="fmtCurrency(calc.quebrantoTotal)"></span></div>
+                                            </div>
+                                            <div x-show="calc.montoFinanciado > 0" class="mt-4 p-4 bg-slate-50 border border-slate-100 rounded-2xl text-vw-blue">
+                                                <div class="flex justify-between items-center mb-1"><span class="text-[9px] font-bold text-slate-400 uppercase">Capital Financiado</span><span class="text-xs font-black text-vw-light-blue" x-text="calc.cuotas + ' Cuotas'"></span></div>
+                                                <p class="text-lg font-black" x-text="fmtCurrency(calc.montoFinanciado)"></p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Error Card (Insufficient Delivery) -->
+                                <div x-show="calc.isError" class="bg-red-50 p-8 md:p-12 rounded-[38px] border-2 border-red-100 relative overflow-hidden text-center animate-in zoom-in duration-300">
+                                    <div class="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                                        <i data-lucide="alert-circle" class="w-8 h-8"></i>
+                                    </div>
+                                    <h3 class="text-red-900 font-black text-2xl mb-2">Entrega Insuficiente</h3>
+                                    <p class="text-red-700/70 text-sm mb-8 max-w-xs mx-auto">El capital disponible no alcanza para retirar la unidad bajo estas condiciones financieras.</p>
+                                    
+                                    <div class="bg-white p-6 rounded-3xl border border-red-100 space-y-4 mb-8 shadow-sm">
+                                        <div class="flex justify-between items-center text-xs">
+                                            <span class="text-slate-400 uppercase font-bold">Entrega Declarada</span>
+                                            <span class="text-vw-blue font-black" x-text="fmtCurrency(calc.anticipo)"></span>
+                                        </div>
+                                        <div class="h-px bg-red-50"></div>
+                                        <div class="flex flex-col items-center gap-1">
+                                            <span class="text-[10px] text-red-400 uppercase font-bold tracking-widest">Diferencia Faltante</span>
+                                            <span class="text-red-600 font-black text-3xl" x-text="fmtCurrency(calc.falta)"></span>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex flex-col gap-1 items-center opacity-60">
+                                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]" x-text="calc.modelo"></span>
+                                        <span class="text-[9px] font-bold text-slate-400 uppercase" x-text="calc.campNombre"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+
+        <footer class="max-w-6xl mx-auto px-4 py-12 text-center text-slate-400 text-xs">
+            <p>© <span x-text="new Date().getFullYear()"></span> AutoQuote Pro - Cotizador Profesional de Vehículos</p>
+            <p class="mt-2">Datos calculados mediante base de datos oficial.</p>
+        </footer>
+    </div>
+
+    <!-- Logic Script -->
     <script>
-      window.addEventListener('DOMContentLoaded', () => {
-        // Un pequeño retraso para permitir que app.js intente la sincronización
-        setTimeout(() => {
-          const loader = document.getElementById('loading-overlay');
-          if (loader && !loader.classList.contains('hidden')) {
-            console.log("Loader ocultado por script de respaldo.");
-            loader.classList.add('opacity-0');
-            setTimeout(() => loader.classList.add('hidden'), 500);
-          }
-        }, 5000); // 5 segundos de cortesía
-      });
+        function app() {
+            return {
+                loading: true,
+                prices: [],
+                campaigns: [],
+                currentScreen: 'cot',
+                search: '',
+                provincia: 'neuquen',
+                results: [],
+                meta: null,
+
+                // State Cotizador
+                cot_mod: '', cot_ver: 0, cot_usd_display: '', cot_mnt1_display: '', cot_mnt2_display: '', cot_cmp1: 0, cot_cmp2: 0, cot_show2: false,
+
+                // State Comparativa
+                comp_mod_a: '', comp_ver_a: 0, comp_mnt_a: '', comp_usd_a: '', comp_cmp_a: 0,
+                comp_show2_a: false, comp_mnt2_a: '', comp_cmp2_a: 0,
+                comp_mod_b: '', comp_ver_b: 0, comp_mnt_b: '', comp_usd_b: '', comp_cmp_b: 0,
+                comp_show2_b: false, comp_mnt2_b: '', comp_cmp2_b: 0,
+
+                // State Promo
+                pro_mod: '', pro_ver: 0, pro_prm: '', pro_pat: '', pro_mnt: '', pro_usd_display: '', pro_cmp: 0,
+                pro_show2: false, pro_mnt2: '', pro_cmp2: 0,
+
+                // State Entrega
+                ent_mod: '', ent_ver: 0, ent_val: '', ent_cmp: 0, ent_is_pro: false, ent_prm: '', ent_pat: '',
+                ent_show2: false, ent_val2: '', ent_cmp2: 0,
+
+                mapModelName(rawName) {
+                    if (!rawName) return '';
+                    let str = String(rawName).toLowerCase().trim();
+                    
+                    const modelMap = {
+                        'amarok': 'pickup titan',
+                        'taos': 'suv apex',
+                        't-cross': 'suv compact',
+                        'tcross': 'suv compact',
+                        'nivus': 'crossover sport',
+                        'polo': 'hatchback urban',
+                        'virtus': 'sedan gt',
+                        'saveiro': 'pickup flex',
+                        'vento': 'sedan executive',
+                        'tiguan': 'suv horizon',
+                        'golf': 'hatchback pro',
+                        'up!': 'compact city',
+                        'up': 'compact city',
+                        'suran': 'family wagon',
+                        'fox': 'hatchback city',
+                        'bora': 'sedan classic'
+                    };
+
+                    for (const [key, replacement] of Object.entries(modelMap)) {
+                        if (str === key) return replacement;
+                        if (str.includes(key)) {
+                            str = str.replace(new RegExp(key, 'gi'), replacement);
+                        }
+                    }
+
+                    return str.replace(/volkswagen/gi, 'Auto')
+                              .replace(/vw/gi, 'Auto')
+                              .replace(/iruña/gi, '')
+                              .replace(/iruna/gi, '')
+                              .trim();
+                },
+
+                mapVersionName(rawVersion) {
+                    if (!rawVersion) return '';
+                    let str = String(rawVersion).trim();
+                    
+                    const versionMap = [
+                        [/comfortline/gi, 'Dynamic'],
+                        [/trendline/gi, 'Active'],
+                        [/highline/gi, 'Executive'],
+                        [/black style/gi, 'Dark Edition'],
+                        [/extreme/gi, 'Ultra Sport'],
+                        [/hero/gi, 'Launch Edition'],
+                        [/pepper/gi, 'Sport Edition'],
+                        [/connect/gi, 'Tech Edition'],
+                        [/sound/gi, 'Audio Edition'],
+                        [/track/gi, 'Urban'],
+                        [/cross/gi, 'Allroad'],
+                        [/msi/gi, '1.6 16v'],
+                        [/tsi/gi, 'Turbo'],
+                        [/gts/gi, 'Sport GT'],
+                        [/gli/gi, 'Performance'],
+                        [/volkswagen/gi, 'Auto'],
+                        [/vw/gi, 'Auto'],
+                        [/iruña/gi, ''],
+                        [/iruna/gi, '']
+                    ];
+
+                    for (const [pattern, replacement] of versionMap) {
+                        str = str.replace(pattern, replacement);
+                    }
+
+                    return str.trim();
+                },
+
+                cleanText(txt) {
+                    if (!txt) return '';
+                    return this.mapVersionName(txt);
+                },
+
+                async initData() {
+                    const SHEET_ID = '1e16MGd26-RQIVtbiUJzROex43vj9DXCPqpz_ez2Oo60';
+                    const BASE = 'https://opensheet.elk.sh/' + SHEET_ID;
+                    
+                    try {
+                        const [pRes, cRes] = await Promise.all([
+                            fetch(BASE + '/precios'),
+                            fetch(BASE + '/campanias')
+                        ]);
+                        
+                        const pData = await pRes.json();
+                        const cData = await cRes.json();
+
+                        this.prices = Array.isArray(pData) ? pData.filter(x => x.modelo && x.version).map(x => ({
+                            modelo: this.mapModelName(x.modelo),
+                            version: this.cleanText(x.version || ''),
+                            ano: (x.ano || '').trim(),
+                            fae: this.parseNum(x.fae),
+                            precioFinal: this.parseNum(x.precioFinal),
+                            precioSugerido: this.parseNum(x.precio_sugerido),
+                            nqn: this.parseNum(x.neuquen),
+                            rn: this.parseNum(x.rio_negro)
+                        })) : [];
+
+                        this.campaigns = Array.isArray(cData) ? cData.filter(x => x.nombre && x.modelos).map(x => ({
+                            nombre: this.cleanText(x.nombre || ''),
+                            cuota1000: this.parseNum(x.cuota1000),
+                            maxFin: this.parseNum(x.maxFin),
+                            quebranto: this.parseNum(x.quebranto),
+                            cuotas: this.parseNum(x.cuotas),
+                            modelos: (x.modelos || '').split(',').map(m => this.mapModelName(m))
+                        })) : [];
+
+                        if (this.prices.length > 0) {
+                            this.cot_mod = this.uniqueModels[0];
+                            this.comp_mod_a = this.uniqueModels[0];
+                            this.comp_mod_b = this.uniqueModels[0];
+                            this.pro_mod = this.uniqueModels[0];
+                            this.ent_mod = this.uniqueModels[0];
+                        }
+                    } catch (e) {
+                        console.error('Error load', e);
+                    } finally {
+                        this.loading = false;
+                        this.$nextTick(() => lucide.createIcons());
+                    }
+                },
+
+                get uniqueModels() {
+                    return [...new Set(this.prices.map(p => p.modelo))];
+                },
+
+                filteredVersions(modelo) {
+                    return this.prices.filter(p => p.modelo === (modelo || '').toLowerCase());
+                },
+
+                get filteredPrices() {
+                    if (!this.search) return this.prices;
+                    const s = this.search.toLowerCase();
+                    return this.prices.filter(p => p.modelo.includes(s) || p.version.toLowerCase().includes(s));
+                },
+
+                getCamps(modelo, version) {
+                    if (!modelo || !version) return [];
+                    const mod = modelo.toLowerCase().trim();
+                    const ver = version.toLowerCase().trim();
+                    return this.campaigns.filter(c => c.modelos.includes(mod) || c.modelos.includes(mod + ' ' + ver));
+                },
+
+                getCampsPromo(modelo, verIdx) {
+                    const versions = this.filteredVersions(modelo);
+                    const selected = versions[verIdx];
+                    if(!selected) return [];
+                    const mod = modelo.toLowerCase().trim();
+                    const ver = (selected.version + ' ' + selected.ano).toLowerCase();
+                    const full = (mod + ' ' + ver).toLowerCase();
+                    return this.campaigns.filter(c => c.modelos.some(m => full.includes(m.toLowerCase().trim())));
+                },
+
+                calculateCot() {
+                    this.results = [];
+                    const u = this.cleanNum(this.cot_usd_display);
+                    const c1 = this.getCalculo(this.cot_mod, this.cot_ver, this.cleanNum(this.cot_mnt1_display), this.provincia, this.cot_cmp1, u);
+                    if (c1) this.results.push(c1);
+                    if (this.cot_show2) {
+                        const c2 = this.getCalculo(this.cot_mod, this.cot_ver, this.cleanNum(this.cot_mnt2_display), this.provincia, this.cot_cmp2, u);
+                        if (c2) this.results.push(c2);
+                    }
+                    this.meta = { tipo: 'Directa', modelo: this.cot_mod, version: this.filteredVersions(this.cot_mod)[this.cot_ver]?.version };
+                    this.$nextTick(() => lucide.createIcons());
+                },
+
+                calculateComp() {
+                   this.results = [];
+                   const uA = this.cleanNum(this.comp_usd_a);
+                   const uB = this.cleanNum(this.comp_usd_b);
+                   
+                   const rA1 = this.getCalculo(this.comp_mod_a, this.comp_ver_a, this.cleanNum(this.comp_mnt_a), this.provincia, this.comp_cmp_a, uA);
+                   if(rA1) {
+                       rA1.campNombre = "Opción A1: " + rA1.campNombre;
+                       this.results.push(rA1);
+                   }
+                   if (this.comp_show2_a) {
+                       const rA2 = this.getCalculo(this.comp_mod_a, this.comp_ver_a, this.cleanNum(this.comp_mnt2_a), this.provincia, this.comp_cmp2_a, uA);
+                       if(rA2) {
+                           rA2.campNombre = "Opción A2: " + rA2.campNombre;
+                           this.results.push(rA2);
+                       }
+                   }
+                   
+                   const rB1 = this.getCalculo(this.comp_mod_b, this.comp_ver_b, this.cleanNum(this.comp_mnt_b), this.provincia, this.comp_cmp_b, uB);
+                   if(rB1) {
+                       rB1.campNombre = "Opción B1: " + rB1.campNombre;
+                       this.results.push(rB1);
+                   }
+                   if (this.comp_show2_b) {
+                       const rB2 = this.getCalculo(this.comp_mod_b, this.comp_ver_b, this.cleanNum(this.comp_mnt2_b), this.provincia, this.comp_cmp2_b, uB);
+                       if(rB2) {
+                           rB2.campNombre = "Opción B2: " + rB2.campNombre;
+                           this.results.push(rB2);
+                       }
+                   }
+                   this.meta = { tipo: 'Comparativa', modelo: 'Variados' };
+                   this.$nextTick(() => {
+                       lucide.createIcons();
+                       window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                   });
+                },
+
+                calculatePro() {
+                    this.results = [];
+                    const prmVal = this.cleanNum(this.pro_prm);
+                    const patVal = this.cleanNum(this.pro_pat) || null;
+                    const usdVal = this.cleanNum(this.pro_usd_display);
+                    
+                    const c1 = this.getCalculo(this.pro_mod, this.pro_ver, this.cleanNum(this.pro_mnt), this.provincia, this.pro_cmp, usdVal, prmVal, patVal, true);
+                    if(c1) {
+                        c1.campNombre = "Promo: " + c1.campNombre;
+                        this.results.push(c1);
+                    }
+                    
+                    if (this.pro_show2) {
+                        const c2 = this.getCalculo(this.pro_mod, this.pro_ver, this.cleanNum(this.pro_mnt2), this.provincia, this.pro_cmp2, usdVal, prmVal, patVal, true);
+                        if(c2) {
+                            c2.campNombre = "Promo Opción 2: " + c2.campNombre;
+                            this.results.push(c2);
+                        }
+                    }
+                    this.meta = { tipo: 'Promo', modelo: this.pro_mod };
+                    this.$nextTick(() => {
+                        lucide.createIcons();
+                        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                    });
+                },
+
+                compareProWithList() {
+                    this.results = [];
+                    const monto = this.cleanNum(this.pro_mnt);
+                    const usd = this.cleanNum(this.pro_usd_display);
+                    
+                    // Cálculo Promo
+                    const cPro = this.getCalculo(this.pro_mod, this.pro_ver, monto, this.provincia, this.pro_cmp, usd, this.cleanNum(this.pro_prm), this.cleanNum(this.pro_pat) || null, true);
+                    if(cPro) {
+                        cPro.campNombre = "OPCIÓN PROMO";
+                        this.results.push(cPro);
+                    }
+                    
+                    // Cálculo Lista (Venta Directa)
+                    const versions = this.filteredVersions(this.pro_mod);
+                    const v = versions[this.pro_ver];
+                    const campsNorm = this.getCamps(this.pro_mod, v?.version);
+                    const campIdxNorm = campsNorm.findIndex(c => c.nombre === this.getCampsPromo(this.pro_mod, this.pro_ver)[this.pro_cmp]?.nombre);
+                    const actualIdxNorm = campIdxNorm !== -1 ? campIdxNorm : 0;
+
+                    const cList = this.getCalculo(this.pro_mod, this.pro_ver, monto, this.provincia, actualIdxNorm, usd);
+                    if(cList) {
+                        cList.campNombre = "OPCIÓN LISTA";
+                        this.results.push(cList);
+                    }
+
+                    this.meta = { tipo: 'Comparativa Promo', modelo: this.pro_mod };
+                    this.$nextTick(() => {
+                        lucide.createIcons();
+                        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                    });
+                },
+
+                calculateEnt() {
+                    this.results = [];
+                    const ent1 = this.cleanNum(this.ent_val);
+                    if(ent1 <= 0) return alert('Indique monto de entrega');
+                    
+                    const mod = this.ent_mod, verIdx = this.ent_ver;
+                    const selected = this.filteredVersions(mod)[verIdx];
+                    if(!selected) return;
+                    
+                    const runCalculationForCamp = (capital, campIndex, optionLabel) => {
+                        const camp = this.getCamps(mod, selected.version)[campIndex];
+                        if(!camp) return null;
+
+                        const pR = this.ent_is_pro ? this.cleanNum(this.ent_prm) : selected.precioFinal;
+                        const fae = this.ent_is_pro ? 0 : selected.fae;
+                        
+                        let pInitial;
+                        if (this.ent_is_pro && this.ent_pat) {
+                            pInitial = this.cleanNum(this.ent_pat);
+                        } else {
+                            pInitial = (this.provincia === 'neuquen' ? (pR - fae)*0.045 : (pR - fae)*0.055);
+                        }
+
+                        const factorPrenda = (this.provincia === 'neuquen' ? 0.025 : 0.035);
+                        
+                        const cuotaTotal1000 = camp.cuota1000 * camp.cuotas;
+                        const K = -1 + 0.02 + (cuotaTotal1000 * factorPrenda / 1000) + (camp.quebranto * 1.21 / 100);
+                        
+                        const minEntRequired = pR + pInitial - (camp.maxFin * Math.abs(K));
+                        if (capital < minEntRequired) {
+                            const diff = minEntRequired - capital;
+                            return {
+                                isError: true,
+                                falta: diff,
+                                modelo: mod.toUpperCase(),
+                                version: selected.version,
+                                campNombre: optionLabel + ": " + camp.nombre,
+                                anticipo: capital
+                            };
+                        } else {
+                            let F = (capital - pR - pInitial) / K;
+                            
+                            if (F > camp.maxFin) F = camp.maxFin;
+                            if (F < 0) F = 0;
+
+                            const c = this.getCalculo(mod, verIdx, F, this.provincia, campIndex, 0, this.ent_is_pro ? pR : null, (this.ent_is_pro && this.ent_pat) ? pInitial : null);
+                            if(c) {
+                                c.campNombre = optionLabel + ": " + c.campNombre;
+                            }
+                            return c;
+                        }
+                    };
+
+                    const c1 = runCalculationForCamp(ent1, this.ent_cmp, "Opción 1");
+                    if(c1) this.results.push(c1);
+
+                    if (this.ent_show2) {
+                        const ent2Raw = this.cleanNum(this.ent_val2);
+                        const ent2 = ent2Raw > 0 ? ent2Raw : ent1;
+                        const c2 = runCalculationForCamp(ent2, this.ent_cmp2, "Opción 2");
+                        if(c2) this.results.push(c2);
+                    }
+
+                    this.meta = { tipo: 'Entrega', modelo: mod };
+                    this.$nextTick(() => {
+                        lucide.createIcons();
+                        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                    });
+                },
+
+                getCalculo(modelo, verIdx, monto, prov, campIdx, usado = 0, overridePrice = null, overridePatent = null, isPromo = false) {
+                    const versions = this.filteredVersions(modelo);
+                    const data = versions[verIdx];
+                    if (!data) return null;
+
+                    const precioReal = overridePrice || data.precioFinal;
+                    const fae = overridePrice ? 0 : data.fae;
+                    let cuota = 0, gestion = 0, prenda = 0, quebranto = 0, cuotas = 0, campNombre = "Contado";
+
+                    const patent = overridePatent !== null ? overridePatent : (prov === 'neuquen' ? (precioReal - fae) * 0.045 : (precioReal - fae) * 0.055);
+
+                    if (monto > 0) {
+                        const modCamps = isPromo ? this.getCampsPromo(modelo, verIdx) : this.getCamps(modelo, data.version);
+                        const c = modCamps[campIdx];
+                        if (!c) return null;
+                        gestion = monto * 0.02;
+                        cuotas = c.cuotas;
+                        cuota = c.cuota1000 * (monto / 1000);
+                        prenda = (cuota * cuotas) * (prov === 'neuquen' ? 0.025 : 0.035);
+                        quebranto = (monto * (c.quebranto / 100)) * 1.21;
+                        campNombre = c.nombre;
+                    }
+
+                    const gastos = patent + gestion + prenda + quebranto;
+                    const anticipo = (precioReal - monto - usado) + gastos;
+
+                    return {
+                        modelo: modelo.toUpperCase(), version: data.version, ano: data.ano,
+                        anticipo, cuota, patent, gestion, prenda, quebrantoTotal: quebranto,
+                        gastosTotales: gastos, cuotas, precioFinal: precioReal, campNombre,
+                        montoFinanciado: monto, usado
+                    };
+                },
+
+                parseNum(v) {
+                    if (!v) return 0;
+                    if (typeof v === 'number') return v;
+                    let s = v.trim().replace(/\$/g,'').replace(/\s/g,'');
+                    if(s.includes(',') && s.includes('.')) {
+                        if(s.lastIndexOf(',') > s.lastIndexOf('.')) s = s.replace(/\./g,'').replace(',','.');
+                        else s = s.replace(/,/g,'');
+                    } else if(s.includes(',')) {
+                        s = s.split(',')[1].length <= 2 ? s.replace(',','.') : s.replace(/,/g,'');
+                    } else if(s.includes('.')) {
+                        if(s.split('.').length > 2 || s.split('.')[1].length > 2) s = s.replace(/\./g,'');
+                    }
+                    return parseFloat(s) || 0;
+                },
+
+                cleanNum(v) { return Number(String(v).replace(/\D/g,'')) || 0; },
+                fmtCurrency(v) { return '$' + Math.round(v).toLocaleString('es-AR'); },
+                fmtInput(v) { return this.fmtCurrency(this.cleanNum(v)); },
+                getScreenName(s) {
+                    const names = { cot: 'Cotizar', comp: 'Comparar', lista: 'Precios', promo: 'Promos', entrega: 'Por Entrega' };
+                    return names[s];
+                },
+
+                downloadResults() {
+                    const { jsPDF } = window.jspdf;
+                    const doc = new jsPDF();
+                    this.drawPDF(doc);
+                    doc.save(`Cotizacion_${Date.now()}.pdf`);
+                },
+
+                async shareResults() {
+                    const { jsPDF } = window.jspdf;
+                    const doc = new jsPDF();
+                    this.drawPDF(doc);
+                    const blob = doc.output('blob');
+                    const file = new File([blob], 'Cotizacion.pdf', { type: 'application/pdf' });
+                    if (navigator.share) await navigator.share({ title: 'Resumen Cotización', files: [file] });
+                    else this.downloadResults();
+                },
+
+                drawPDF(doc) {
+                    const fmt = (v) => '$' + Math.round(v).toLocaleString('es-AR');
+                    const primaryColor = [0, 30, 80];
+                    const accentColor = [0, 176, 240];
+                    
+                    // Header Background
+                    doc.setFillColor(...primaryColor); doc.rect(0, 0, 210, 45, 'F');
+                    
+                    // Logo Placeholder Background
+                    doc.setFillColor(255, 255, 255); doc.roundedRect(14, 10, 14, 14, 3, 3, 'F');
+                    
+                    doc.setTextColor(255, 255, 255); 
+                    doc.setFontSize(22); doc.setFont('helvetica', 'bold');
+                    doc.text('AutoQuote Pro', 34, 18);
+                    
+                    doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+                    doc.text('CONCESIONARIO OFICIAL MULTIMARCA', 34, 24);
+                    
+                    doc.setFontSize(10);
+                    doc.text('PROPUESTA COMERCIAL PROFESIONAL', 14, 38);
+                    doc.text(new Date().toLocaleDateString('es-AR', { day:'2-digit', month:'long', year:'numeric'}), 196, 38, { align: 'right' });
+
+                    let y = 55;
+                    const colWidth = this.results.length === 1 ? 182 : 90;
+                    
+                    this.results.forEach((f, idx) => {
+                        const x = 14 + (idx * 92);
+                        
+                        // Card Header
+                        doc.setFillColor(...primaryColor); doc.roundedRect(x, y, colWidth, 12, 3, 3, 'F');
+                        doc.setTextColor(255, 255, 255); doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+                        doc.text(f.modelo, x + colWidth/2, y + 8, { align: 'center' });
+                        
+                        // Card Content Area
+                        doc.setFillColor(248, 250, 252); doc.rect(x, y + 12, colWidth, 160, 'F');
+                        doc.setDrawColor(226, 232, 240); doc.rect(x, y + 12, colWidth, 160, 'S');
+                        
+                        let currentY = y + 22;
+                        doc.setTextColor(...primaryColor); doc.setFontSize(9);
+                        doc.text(f.version, x + colWidth/2, currentY, { align: 'center' });
+                        currentY += 12;
+                        
+                        // Data Rows
+                        const drawRow = (label, value, isBold = false, isAccent = false) => {
+                            doc.setFont('helvetica', isBold ? 'bold' : 'normal');
+                            doc.setTextColor(isAccent === true ? accentColor[0] : (isAccent === 'black' ? 0 : 100), isAccent === true ? accentColor[1] : (isAccent === 'black' ? 0 : 100), isAccent === true ? accentColor[2] : (isAccent === 'black' ? 0 : 100));
+                            doc.text(label, x + 8, currentY);
+                            doc.text(value, x + colWidth - 8, currentY, { align: 'right' });
+                            currentY += 8;
+                        };
+
+                        drawRow('VALOR UNIDAD:', fmt(f.precioFinal), true, 'black');
+                        if(f.usado > 0) drawRow('TOMA DE USADO:', '-' + fmt(f.usado), true, true);
+                        drawRow('PATENTAMIENTO:', fmt(f.patent));
+                        
+                        if(f.montoFinanciado > 0) {
+                            drawRow('GTOS. ADMINISTRACIÓN:', fmt(f.gestion));
+                            drawRow('SELLADO DE PRENDA:', fmt(f.prenda));
+                            drawRow('QUEBRANTO / DER. ADJUD.:', fmt(f.quebrantoTotal));
+                            
+                            currentY += 2;
+                            doc.setFontSize(7.5); doc.setTextColor(...primaryColor); doc.setFont('helvetica', 'bold');
+                            const msg = "Dichos gastos ya se encuentran incluidos en la entrega total para retirar la unidad";
+                            const wrappedMsg = doc.splitTextToSize(msg, colWidth - 16);
+                            doc.text(wrappedMsg, x + colWidth/2, currentY, { align: 'center' });
+                            currentY += (wrappedMsg.length * 4) + 2;
+                            
+                            // Finance Highlight Box (Cleaner)
+                            doc.setDrawColor(...primaryColor); doc.setLineWidth(0.6);
+                            doc.roundedRect(x + 5, currentY - 2, colWidth - 10, 32, 4, 4, 'S');
+                            
+                            doc.setTextColor(...primaryColor); doc.setFontSize(13); doc.setFont('helvetica', 'bold');
+                            doc.text(fmt(f.cuota) + ' + Seg.', x + colWidth/2, currentY + 14, { align: 'center' });
+                            
+                            doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+                            doc.text(`${f.cuotas} CUOTAS DE`, x + colWidth/2, currentY + 6, { align: 'center' });
+                            
+                            doc.setFillColor(...primaryColor); doc.roundedRect(x + 10, currentY + 18, colWidth - 20, 10, 2, 2, 'F');
+                            doc.setTextColor(255, 255, 255); doc.setFontSize(8.5); doc.setFont('helvetica', 'bold');
+                            doc.text(`CAPITAL FINANCIADO: ${fmt(f.montoFinanciado)}`, x + colWidth/2, currentY + 25, { align: 'center' });
+                            
+                            currentY += 42;
+                        } else {
+                            currentY += 15;
+                            doc.setFontSize(8.5); doc.setTextColor(...primaryColor); doc.setFont('helvetica', 'bold');
+                            const msg = "Dichos gastos ya se encuentran incluidos en el total contado.";
+                            const wrappedMsg = doc.splitTextToSize(msg, colWidth - 16);
+                            doc.text(wrappedMsg, x + colWidth/2, currentY, { align: 'center' });
+                            currentY += 25;
+                        }
+                        
+                        // Final Total Box
+                        doc.setFillColor(...primaryColor); doc.roundedRect(x + 5, y + 172 - 32, colWidth - 10, 28, 5, 5, 'F');
+                        doc.setTextColor(255, 255, 255); doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+                        doc.text(f.montoFinanciado === 0 ? 'TOTAL CONTADO' : 'ENTREGA TOTAL PARA RETIRAR', x + colWidth/2, y + 172 - 22, { align: 'center' });
+                        doc.setFontSize(18); doc.text(fmt(f.anticipo), x + colWidth/2, y + 172 - 10, { align: 'center' });
+                    });
+
+                    // Extra bottom spacing if needed
+                    doc.setTextColor(100); doc.setFontSize(8); doc.setFont('helvetica', 'bold');
+                    const bottomMsg = "Gastos incluidos: Patentamiento, Gestión, Prenda y Quebrantos.";
+                    doc.text(bottomMsg, 105, 275, { align: 'center' });
+                    
+                    doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
+                    doc.text('Precios sujetos a variación según lista oficial de fábrica al momento de la facturación.', 105, 282, { align: 'center' });
+                }
+            }
+        }
     </script>
 </body>
 </html>
